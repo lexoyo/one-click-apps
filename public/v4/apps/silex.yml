@@ -1,0 +1,65 @@
+captainVersion: 4
+services:
+    $$cap_appname:
+        image: silexlabs/silex:$$cap_SILEX_VERSION
+        environment:
+            SILEX_SESSION_NAME: $$cap_gen_random_hex(16)
+            SILEX_SESSION_SECRET: $$cap_gen_random_hex(32)
+            SILEX_URL: http://$$cap_appname.$$cap_root_domain
+        volumes:
+            - $$cap_appname:/data
+        caproverExtra:
+            containerHttpPort: '6805'
+        restart: always
+caproverOneClickApp:
+    displayName: Silex
+    description: Free/Libre website builder, visually creating static sites with dynamic data
+    documentation: https://docs.silex.me/
+    isOfficial: true
+    instructions:
+        start: |-
+            🚀 *Silex** is a free/libre website builder, visually creating static sites with dynamic data.
+            --------------------------------------------
+            
+            Silex is a forward-looking platform that combines the values of free software and the inclusive nature of no-code. It embraces the static web and connects with most headless tools.
+
+            With caprover you can easily install a headless CMS like Strapi, Ghost, or WordPress, and connect it to Silex to create static websites which can be edited by your clients.
+
+            --------------------------------------------
+            📚 Links
+            - [Configuration Options](https://docs.silex.me/en/dev/options)
+            - [List of compatible headless CMS and database](https://docs.silex.me/en/user/cms#compatible-headless-cms)
+            - [Documentation](https://short.silex.me/docs)
+            - [Forums](https://short.silex.me/community)
+            - [Source code](https://short.silex.me/code)
+            - [Roadmap](https://short.silex.me/roadmap)
+            - [Mastodon](https://short.silex.me/mastodon)
+        end: |-
+            ✅ **Silex has been deployed!**
+            --------------------------------------------
+            Silex has been successfully deployed!
+
+            🚀 Next steps:
+
+            1. Test the Silex by visiting `http://$$cap_appname.$$cap_root_domain`.
+            2. You might want change the environment variables to customize the Silex installation further. Check the list of available environment variables at https://docs.silex.me/en/dev/options
+            3. Install a headless CMS or database to use with Silex. Check the list of compatible headless CMS and database at https://docs.silex.me/en/user/cms#compatible-headless-cms
+
+            ❗️ **WARNING**: By default Silex stores the user data on the server filesystem. This is not recommended for production use. You should configure a storage and hosting connector to store the user data on a different server or on a giltab instance. This can be done by changing the environment variables in the app settings. Check the available environment variables at https://docs.silex.me/en/dev/options
+
+            --------------------------------------------
+            📚 Links
+            - [Configuration Options](https://docs.silex.me/en/dev/options)
+            - [List of compatible headless CMS and database](https://docs.silex.me/en/user/cms#compatible-headless-cms)
+            - [Documentation](https://short.silex.me/docs)
+            - [Forums](https://short.silex.me/community)
+            - [Source code](https://short.silex.me/code)
+            - [Roadmap](https://short.silex.me/roadmap)
+            - [Mastodon](https://short.silex.me/mastodon)
+
+            --------------------------------------------
+    variables:
+        - id: $$cap_SILEX_VERSION
+          label: Silex docker image version tag
+          description: Check out the valid tags @ https://hub.docker.com/r/silexlabs/silex/tags and corresponding Silex releases @ https://github.com/silexlabs/Silex/releases
+          defaultValue: v3.0.0-alpha.160
