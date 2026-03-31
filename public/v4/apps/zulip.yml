@@ -1,0 +1,198 @@
+captainVersion: 4
+
+services:
+    # PostgreSQL Database
+    $$cap_appname-db:
+        image: zulip/zulip-postgresql:$$cap_postgres_version
+        restart: always
+        volumes:
+            - $$cap_appname-db-data:/var/lib/postgresql/data
+        environment:
+            POSTGRES_DB: zulip
+            POSTGRES_USER: zulip
+            POSTGRES_PASSWORD: $$cap_postgres_password
+        caproverExtra:
+            notExposeAsWebApp: 'true'
+
+    # Memcached with SASL authentication
+    $$cap_appname-memcached:
+        restart: always
+        environment:
+            MEMCACHED_PASSWORD: $$cap_memcached_password
+        caproverExtra:
+            notExposeAsWebApp: 'true'
+            dockerfileLines:
+                - FROM memcached:alpine
+                - RUN apk add --no-cache cyrus-sasl cyrus-sasl-plain
+                - CMD sh -c "echo \"zulip:$MEMCACHED_PASSWORD\" | saslpasswd2 -p -a memcached -f /tmp/memcached-sasl-db zulip && echo 'mech_list: plain' > /tmp/memcached.conf && SASL_CONF_PATH=/tmp/memcached.conf MEMCACHED_SASL_PWDB=/tmp/memcached-sasl-db memcached -S"
+
+    # RabbitMQ Message Broker
+    $$cap_appname-rabbitmq:
+        image: rabbitmq:$$cap_rabbitmq_version
+        restart: always
+        volumes:
+            - $$cap_appname-rabbitmq-data:/var/lib/rabbitmq
+        environment:
+            RABBITMQ_DEFAULT_USER: zulip
+            RABBITMQ_DEFAULT_PASS: $$cap_rabbitmq_password
+        caproverExtra:
+            notExposeAsWebApp: 'true'
+
+    # Redis Cache
+    $$cap_appname-redis:
+        restart: always
+        volumes:
+            - $$cap_appname-redis-data:/data
+        environment:
+            REDIS_PASSWORD: $$cap_redis_password
+        caproverExtra:
+            notExposeAsWebApp: 'true'
+            dockerfileLines:
+                - FROM redis:alpine
+                - CMD sh -c "redis-server --requirepass \"$REDIS_PASSWORD\""
+
+    # Zulip Server
+    $$cap_appname:
+        depends_on:
+            - $$cap_appname-db
+            - $$cap_appname-memcached
+            - $$cap_appname-rabbitmq
+            - $$cap_appname-redis
+        restart: always
+        volumes:
+            - $$cap_appname-data:/data
+        environment:
+            SETTING_EXTERNAL_HOST: $$cap_external_host
+            SETTING_ZULIP_ADMINISTRATOR: $$cap_zulip_admin_email
+            SETTING_REMOTE_POSTGRES_HOST: srv-captain--$$cap_appname-db
+            SETTING_MEMCACHED_LOCATION: srv-captain--$$cap_appname-memcached:11211
+            SETTING_RABBITMQ_HOST: srv-captain--$$cap_appname-rabbitmq
+            SETTING_REDIS_HOST: srv-captain--$$cap_appname-redis
+            SETTING_EMAIL_HOST: $$cap_smtp_host
+            SETTING_EMAIL_HOST_USER: $$cap_smtp_user
+            SETTING_EMAIL_PORT: $$cap_smtp_port
+            SETTING_EMAIL_USE_TLS: 'true'
+            DISABLE_HTTPS: 'true'
+            SECRETS_postgres_password: $$cap_postgres_password
+            SECRETS_memcached_password: $$cap_memcached_password
+            SECRETS_rabbitmq_password: $$cap_rabbitmq_password
+            SECRETS_redis_password: $$cap_redis_password
+            SECRETS_secret_key: $$cap_secret_key
+            SECRETS_email_password: $$cap_email_password
+        caproverExtra:
+            containerHttpPort: '80'
+            dockerfileLines:
+                - FROM ghcr.io/zulip/zulip-server:$$cap_zulip_version
+                - CMD sh -c "mkdir -p /run/secrets && echo \"$SECRETS_postgres_password\" > /run/secrets/zulip__postgres_password && echo \"$SECRETS_memcached_password\" > /run/secrets/zulip__memcached_password && echo \"$SECRETS_rabbitmq_password\" > /run/secrets/zulip__rabbitmq_password && echo \"$SECRETS_redis_password\" > /run/secrets/zulip__redis_password && echo \"$SECRETS_secret_key\" > /run/secrets/zulip__secret_key && echo \"$SECRETS_email_password\" > /run/secrets/zulip__email_password && exec /home/zulip/deployments/current/scripts/start-server"
+
+caproverOneClickApp:
+    variables:
+        - id: $$cap_zulip_version
+          label: Zulip Version
+          defaultValue: '11.6-0'
+          description: >-
+              Zulip server version tag.
+              Check https://github.com/zulip/docker-zulip/releases for available versions.
+          validRegex: /^([^\s^\/])+$/
+        - id: $$cap_postgres_version
+          label: PostgreSQL Version
+          defaultValue: '14'
+          description: >-
+              PostgreSQL version for zulip/zulip-postgresql image.
+          validRegex: /^([^\s^\/])+$/
+        - id: $$cap_rabbitmq_version
+          label: RabbitMQ Version
+          defaultValue: '4.2'
+          description: >-
+              RabbitMQ version tag.
+              Check https://hub.docker.com/_/rabbitmq?tab=tags for valid tags.
+          validRegex: /^([^\s^\/])+$/
+        - id: $$cap_external_host
+          label: Zulip External Host
+          defaultValue: ''
+          description: >-
+              The domain name where Zulip will be accessible (e.g. zulip.example.com).
+              This should match the CapRover app URL.
+          validRegex: /^.{3,}$/
+        - id: $$cap_zulip_admin_email
+          label: Zulip Administrator Email
+          defaultValue: ''
+          description: >-
+              Email address of the Zulip administrator.
+          validRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        - id: $$cap_postgres_password
+          label: PostgreSQL Password
+          defaultValue: $$cap_gen_random_hex(32)
+          description: Password for the PostgreSQL database.
+          validRegex: /.{8,}/
+        - id: $$cap_memcached_password
+          label: Memcached Password
+          defaultValue: $$cap_gen_random_hex(32)
+          description: Password for Memcached SASL authentication.
+          validRegex: /.{8,}/
+        - id: $$cap_rabbitmq_password
+          label: RabbitMQ Password
+          defaultValue: $$cap_gen_random_hex(32)
+          description: Password for the RabbitMQ message broker.
+          validRegex: /.{8,}/
+        - id: $$cap_redis_password
+          label: Redis Password
+          defaultValue: $$cap_gen_random_hex(32)
+          description: Password for Redis cache.
+          validRegex: /.{8,}/
+        - id: $$cap_secret_key
+          label: Zulip Secret Key
+          defaultValue: $$cap_gen_random_hex(64)
+          description: Django secret key used by Zulip. Must be kept secret.
+          validRegex: /.{16,}/
+        - id: $$cap_smtp_host
+          label: SMTP Host (optional)
+          defaultValue: ''
+          description: >-
+              SMTP server hostname for sending emails (e.g. smtp.gmail.com).
+              Leave empty to configure later.
+        - id: $$cap_smtp_port
+          label: SMTP Port
+          defaultValue: '587'
+          description: SMTP server port (587 for TLS, 465 for SSL).
+          validRegex: /^\d+$/
+        - id: $$cap_smtp_user
+          label: SMTP Username (optional)
+          defaultValue: ''
+          description: >-
+              SMTP authentication username.
+              Leave empty to configure later.
+        - id: $$cap_email_password
+          label: SMTP Password (optional)
+          defaultValue: ''
+          description: >-
+              SMTP authentication password.
+              Leave empty to configure later.
+    instructions:
+        start: >-
+            Zulip is a powerful open-source team chat application with topic-based threading.
+            This will deploy Zulip with PostgreSQL, Memcached, RabbitMQ, and Redis.
+
+            Requirements:
+            - Minimum 2GB RAM recommended (4GB preferred)
+            - First deployment may take several minutes while Zulip initializes
+
+            For more information, visit https://zulip.com
+        end: >-
+            Zulip has been deployed!
+
+            IMPORTANT: First startup may take 3-5 minutes while the database is initialized.
+
+            Next steps:
+            1. Enable HTTPS for your app in CapRover
+            2. Make sure your External Host ($$cap_external_host) points to your CapRover server
+            3. Visit your Zulip instance to create your organization
+
+            If you did not configure SMTP during setup, you can add email settings later
+            via the Zulip admin panel or by updating the environment variables in CapRover.
+
+            Documentation: https://zulip.readthedocs.io/en/latest/production/install.html
+    displayName: Zulip
+    isOfficial: false
+    description: Zulip is an open-source team collaboration tool with unique topic-based threading.
+    documentation: https://zulip.readthedocs.io/en/latest/production/install.html
